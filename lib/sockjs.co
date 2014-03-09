@@ -1,0 +1,175 @@
+var httpServer, sockjsServer, connection
+
+config =
+	bindIp: \0.0.0.0
+	host: \localhost
+	port: 9999
+
+serializeMessage = (event)-> JSON.stringify event
+unserializeMessage = (data)-> (new Event) <<< JSON.parse(data)
+
+DEBUG = true
+debug = -> (console.log.apply this, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if DEBUG
+error = -> (console.log.apply this, @@)
+
+
+fs = require('fs')
+http = require('http')
+sockjs = require('sockjs')
+_ = require('lodash')
+onFileChange = require('./onFileChange.js')
+
+# events manager
+# EventEmitter = require('events').EventEmitter
+EventEmitter2 = require('eventemitter2').EventEmitter2
+# class AllEvents extends EventEmitter
+# allEvents = new AllEvents()
+allEvents = new EventEmitter2({
+	wildcard: true
+})
+
+class Event
+	connId: -1
+	eventId: -1
+	msgId: -1
+	message: ""
+
+	respond: (responseMessage)->
+		newEvent = new Event
+		newEvent.connId = @connId
+		newEvent.eventId = @eventId
+		newEvent.msgId = @msgId
+		newEvent.message = responseMessage
+
+		debug {type: "respond", newEvent: newEvent}
+
+		self.sendEvent newEvent
+
+# url injected into http client
+injectedUrl = "http://"+config.host+":"+config.port+"/sockjs"
+clientPath = __dirname+"/../client/sockjs-eventbus.js"
+commonCodePath = __dirname+"/common.js"
+
+createClient = ->
+	debug "Creating client"
+	
+	commonCode = fs.readFileSync commonCodePath, "utf8"
+
+	commonCode = "\n// COMMON CODE BEGIN\n"+commonCode+"// COMMON CODE END\n\n"
+
+	clientCode = fs.readFileSync clientPath, "utf8"
+	clientCode .= replace /\{URL_INJECTED_BY_BACKEND\}/, injectedUrl
+	clientCode .= replace /"\{CLIENT_SERVER_COMMON_CODE_INJECTED_BY_BACKEND\}"/, commonCode
+	fs.writeFileSync __dirname+"/../client/sockjs-eventbus.generated.js", clientCode, "utf8"
+
+	onFileChange clientPath, createClient
+
+# serve javascript client
+function httpRequestHandler(req, res)
+	fs.readFile __dirname+"/../client/sockjs-eventbus.generated.js", "binary", (err, file)->
+		if err
+			res.writeHead 500, {"Content-Type": "text/plain"}
+
+			if DEBUG
+				res.write(err + "\n")
+			else
+				res.write \error
+
+			res.end!
+			return
+	
+		res.writeHead(200, {"Content-Type": "text/javascript"})
+		res.write(file, "binary")
+		res.end()
+
+isOpened = false
+
+lastId = 0
+connections = {}
+
+self = module.exports =
+	hlInit: !->
+		debug "Initializing"
+
+		createClient!
+
+		# create sockjs server
+		sockjsServer := sockjs.createServer()
+
+		# main and only handler for incoming connections
+		sockjsServer.on 'connection', (conn)->
+
+			# store connection in global table
+			connections[conn.id] = conn
+
+			# mark connection as opened
+			conn.isOpened = true
+
+			debug {type: "onConnection", msg: "Client connected", connId: conn.id}
+
+			conn.on 'data', (data) -> self.incomingMessageHandler(conn.id, data)
+			conn.on 'close', ->
+				# mark connection as closed
+				# TODO: connections should be removed from `connections` table
+				conn.isOpened = false
+				debug {type: "connectionClosed", connId: conn.id}
+
+		# create http server
+		httpServer := http.createServer(httpRequestHandler)
+
+		# install sockjs over http server
+		sockjsServer.installHandlers httpServer, {prefix:'/sockjs'}
+
+		# enable http server
+		httpServer.listen(config.port, config.bindIp)
+
+	hlUnload: !->
+		debug "Closing server"
+		httpServer.close!
+
+	sendEvent: !(event)->
+		debug {fn: "sendEvent", event: event}
+		c = connections[event.connId]
+
+		if !c
+			error {event: event, fn: "sendEvent", error: "no connection of {connId}"}
+			return
+
+		if c.isOpened
+			c.write serializeMessage(event)
+		else
+			error {event: event, fn: "sendEvent", error: "connection not opened"}
+
+	incomingMessageHandler: !(connId, data)->
+		debug {connId: connId, data: data, fn: "incomingMessageHandler", type: "rawData"}
+	
+		event = unserializeMessage data
+		event.connId = connId
+
+		debug {connId: connId, event: event, fn: "incomingMessageHandler", type: "parsedData"}
+
+		allEvents.emit event.eventId, event.message, event
+
+	on: (eventId, callback)->
+		debug {fn: \on, eventId: eventId}
+		allEvents.addListener eventId+".*", callback
+
+	# TODO: być może powinno to być asynchronicznie w odstępie 10ms?
+	#       jeśli będzie 100 klientów może być cienko z responsywnością
+	broadcastMessage: (eventId, message)->
+		debug {fn: \broadcastMessage, eventId: eventId, message: message}
+
+		_.each _.filter(connections, -> it.isOpened), !(conn)->
+
+			event =
+				connId: conn.id
+				eventId: eventId
+				msgId: -1
+				message: message
+
+			debug {type: "broadcastMessageSingle", event: event}
+
+			self.sendEvent event
+
+	removeListener: (eventId, callback)->
+		allEvents.removeListener eventId, callback

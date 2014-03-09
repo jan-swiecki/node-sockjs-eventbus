@@ -1,0 +1,30 @@
+{
+  "name": "sockjs-eventbus",
+  "version": "0.1.0",
+  "description": "SockJS EventBus. Events over SockJS protocol. Based on EventEmitter2 (so we have events with namespaces and wildcards). Client served similary to socket.io - via nodejs server which is used for SockJS server. This is a prototype.",
+  "main": "index.js",
+  "dependencies": {
+    "eventemitter2": "~0.4.13",
+    "lodash": "~2.4.1",
+    "sockjs": "~0.3.8"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jan-swiecki/node-sockjs-eventbus"
+  },
+  "keywords": [
+    "sockjs",
+    "eventbus",
+    "events"
+  ],
+  "author": "Jan Swiecki <jan.swiecki@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jan-swiecki/node-sockjs-eventbus/issues"
+  },
+  "homepage": "https://github.com/jan-swiecki/node-sockjs-eventbus"
+}

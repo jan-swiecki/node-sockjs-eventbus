@@ -1,0 +1,152 @@
+var client
+
+url = "{URL_INJECTED_BY_BACKEND}"
+DEBUG = true
+debug = -> (console.log.apply console, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if DEBUG
+error = -> (console.error.apply console, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if DEBUG
+
+"{CLIENT_SERVER_COMMON_CODE_INJECTED_BY_BACKEND}"
+
+class Events extends EventEmitter2
+events = new Events()
+
+messageId = 0
+messages = {}
+
+isConnected = false
+isConnecting = false
+ifConnected = ->
+	obj =
+		yes: (fn)-> (fn?! if isConnected); obj
+		no: (fn)-> (fn?! if !isConnected); obj
+
+	obj
+
+serializeMessage = (event)-> JSON.stringify event
+unserializeMessage = (data)-> JSON.parse(data)
+
+wrapperFactory = (callback)->
+	return null if ! _.isFunction(callback)
+
+	->
+		args = @@
+		self.config.updateDom !->
+			debug "Apply", callback
+			callback.apply undefined, args
+
+self = window.sockJsEventBus =
+	config:
+		# if Angular is present and config.$scope is set
+		# then this method will be replaced with $scope.$apply
+		updateDom: (fn)-> fn?!
+	init: !(callback, config)->
+
+
+		if config
+			self.config <<< config
+		else if _.isPlainObject(callback)
+			self.config <<< callback
+			callback = undefined
+
+		if self.config.$scope
+			self.config.updateDom = (fn)-> self.config.$scope.$apply fn
+
+		ifConnected().no(->
+			
+			isConnecting := true
+			events.emit \connecting
+
+			client := new SockJS(url)
+			client.onopen = !->
+				isConnected := true
+				isConnecting := false
+
+				events.emit \connected
+
+				debug \open
+				callback?!
+			client.onmessage = !(e)->
+				data = e.data
+				self.incomingMessageHandler data
+			client.onclose = !->
+				isConnected := false
+				isConnecting := false
+				events.emit \disconnected
+
+				debug \close
+			client.onerror = !(err)->
+				debug \error, err
+
+		).yes ->
+			debug "client already connected"
+			callback?!
+
+	unload: ->
+		client?.close!
+
+	incomingMessageHandler: (data)->
+		event = unserializeMessage data
+
+		debug {fn: "incomingMessageHandler", data: data, event: event}
+
+		# self.config.updateDom ->
+		events.emit event.eventId, event.message, event
+
+	subscribe: (eventId, callback)->
+		debug {fn: "subscribe", eventId: eventId, callback: callback}
+
+		wrapper = wrapperFactory callback
+
+		events.on eventId, wrapper
+		wrapper
+
+	unsubscribe: !(eventId, callback)->
+		debug {fn: "unsubscribe", eventId: eventId, callback: callback}
+		events.removeListener eventId, callback
+
+	unsubscribeAll: !(eventId)->
+		debug {fn: "unsubscribeAll", eventId: eventId}
+		events.removeAllListeners eventId
+
+	once: (eventId, callback)->
+		wrapper = wrapperFactory callback
+		events.once eventId, wrapper
+
+	_once: (eventId, callback)->
+		events.once eventId, callback
+
+	_errorHandler: (err)->
+		error err
+
+	send: (eventId, message, callback)->
+		debug \send, {type: "send", eventId: eventId, message: message}
+		dfd = $.Deferred!
+
+		wrapper = wrapperFactory callback
+
+		_send = ->
+			messageId++
+			newEventId = eventId+"."+messageId
+			self._once newEventId, (response)->
+				# self.config.updateDom ->
+				dfd.resolve(response)
+				wrapper? response
+
+			event =
+				eventId: newEventId
+				msgId: messageId
+				message: message
+
+			client.send serializeMessage(event)
+
+		ifConnected().yes(_send).no(->
+			# dfd.reject "Not connected"
+			debug "Not connected, isConnecting = "+isConnecting
+
+			if isConnecting
+				events.once \connected, _send
+			else
+				self.init _send
+		)
+
+		dfd.fail (err)-> self._errorHandler(err)
