@@ -17,7 +17,7 @@ fs = require('fs')
 http = require('http')
 sockjs = require('sockjs')
 _ = require('lodash')
-onFileChange = require('./onFileChange.js')
+onFileChange = require('on-file-change')
 
 # events manager
 # EventEmitter = require('events').EventEmitter

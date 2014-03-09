@@ -6,7 +6,8 @@
   "dependencies": {
     "eventemitter2": "~0.4.13",
     "lodash": "~2.4.1",
-    "sockjs": "~0.3.8"
+    "sockjs": "~0.3.8",
+    "on-file-change": "*"
   },
   "devDependencies": {},
   "scripts": {
