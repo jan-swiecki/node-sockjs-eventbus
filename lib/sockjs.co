@@ -4,6 +4,7 @@ config =
 	bindIp: \0.0.0.0
 	host: \localhost
 	port: 9999
+	injectUrl: null
 
 serializeMessage = (event)-> JSON.stringify event
 unserializeMessage = (data)-> (new Event) <<< JSON.parse(data)
@@ -45,13 +46,14 @@ class Event
 
 		self.sendEvent newEvent
 
-# url injected into http client
-injectedUrl = "http://"+config.host+":"+config.port+"/sockjs"
 clientPath = __dirname+"/../client/sockjs-eventbus.js"
 commonCodePath = __dirname+"/common.js"
 
 createClient = ->
-	debug "Creating client"
+	# url injected into http client
+	injectedUrl = (if config.injectUrl then config.injectUrl else "http://"+config.host+":"+config.port)+"/sockjs"
+
+	debug "Creating client with url `"+injectedUrl+"`"
 	
 	commonCode = fs.readFileSync commonCodePath, "utf8"
 
@@ -88,8 +90,11 @@ lastId = 0
 connections = {}
 
 self = module.exports =
-	hlInit: !->
+	hlInit: !(_config || {})->
+		config <<< _config
+
 		debug "Initializing"
+		debug {config: config}
 
 		createClient!
 
