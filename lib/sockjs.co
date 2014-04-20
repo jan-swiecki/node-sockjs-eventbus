@@ -1,30 +1,28 @@
-var httpServer, sockjsServer, connection
+var httpServer, httpsServer, sockjsServer, connection
 
 config =
 	bindIp: \0.0.0.0
 	host: \localhost
 	port: 9999
 	injectUrl: null
+	debug: true
 
 serializeMessage = (event)-> JSON.stringify event
 unserializeMessage = (data)-> (new Event) <<< JSON.parse(data)
 
-DEBUG = true
-debug = -> (console.log.apply this, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if DEBUG
+debug = -> (console.log.apply this, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if config.debug
 error = -> (console.log.apply this, @@)
-
 
 fs = require('fs')
 http = require('http')
+https = require('https')
 sockjs = require('sockjs')
 _ = require('lodash')
 onFileChange = require('on-file-change')
 
 # events manager
-# EventEmitter = require('events').EventEmitter
 EventEmitter2 = require('eventemitter2').EventEmitter2
-# class AllEvents extends EventEmitter
-# allEvents = new AllEvents()
+
 allEvents = new EventEmitter2({
 	wildcard: true
 })
@@ -89,12 +87,26 @@ isOpened = false
 lastId = 0
 connections = {}
 
+printConfig = (config)->
+	_.each config, (v,k)->
+		if k is not \cert and k is not \key
+			debug "config.#k = #v"
+
+attachSockJS = (sockjsServer, httpServer, ip, port)->
+	# install sockjs over http server
+	sockjsServer.installHandlers httpServer, {prefix:'/sockjs'}
+
+	debug "http server listen #ip:#port"
+	# enable http server
+	httpServer.listen(port, ip)
+
+
 self = module.exports =
 	hlInit: !(_config || {})->
 		config <<< _config
 
 		debug "Initializing"
-		debug {config: config}
+		printConfig config
 
 		createClient!
 
@@ -120,17 +132,28 @@ self = module.exports =
 				debug {type: "connectionClosed", connId: conn.id}
 
 		# create http server
-		httpServer := http.createServer(httpRequestHandler)
+		if config.sslMode
+			debug "Creating HTTPS Server"
+			httpsServer := https.createServer {cert: config.cert, key: config.key}, httpRequestHandler
 
-		# install sockjs over http server
-		sockjsServer.installHandlers httpServer, {prefix:'/sockjs'}
+			attachSockJS sockjsServer, httpsServer, config.bindIp, config.sslPort
+		else
+			debug "WARNING: All sslMode is disabled, all trafic is going through unsecure channel!".red.bold
 
-		# enable http server
-		httpServer.listen(config.port, config.bindIp)
+		if not config.sslMode or config.httpMode
+			debug "Creating HTTP Server"
+
+			httpServer := http.createServer httpRequestHandler
+			attachSockJS sockjsServer, httpServer, config.bindIp, config.port
+
+			debug "WARNING: unsecure http mode is enabled, all trafic through this channel is unsecure".red.bold
+
+		
 
 	hlUnload: !->
 		debug "Closing server"
-		httpServer.close!
+		httpServer?.close!
+		httpsServer?.close!
 
 	sendEvent: !(event)->
 		debug {fn: "sendEvent", event: event}

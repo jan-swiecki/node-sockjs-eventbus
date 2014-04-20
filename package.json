@@ -1,13 +1,14 @@
 {
   "name": "sockjs-eventbus",
-  "version": "0.1.2-1",
+  "version": "0.1.6",
   "description": "SockJS EventBus. Events over SockJS protocol. Based on EventEmitter2 (so we have events with namespaces and wildcards). Client served similary to socket.io - via nodejs server which is used for SockJS server. This is a prototype.",
   "main": "index.js",
   "dependencies": {
     "eventemitter2": "~0.4.13",
     "lodash": "~2.4.1",
     "sockjs": "~0.3.8",
-    "on-file-change": "*"
+    "on-file-change": "*",
+    "colors": "*"
   },
   "devDependencies": {},
   "scripts": {
