@@ -3,3 +3,4 @@ node_modules
 client/sockjs-eventbus.generated.js
 *.sublime-project
 *.sublime-workspace
+publish.bat

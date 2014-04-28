@@ -62,6 +62,10 @@ createClient = ->
 	clientCode .= replace /"\{CLIENT_SERVER_COMMON_CODE_INJECTED_BY_BACKEND\}"/, commonCode
 	fs.writeFileSync __dirname+"/../client/sockjs-eventbus.generated.js", clientCode, "utf8"
 
+	if config.clientPath
+		debug "Saving client to #{config.clientPath}"
+		fs.writeFileSync config.clientPath, clientCode, "utf8"
+
 	onFileChange clientPath, createClient
 
 # serve javascript client
