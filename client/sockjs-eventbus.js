@@ -2,16 +2,21 @@
   var client, url, DEBUG, debug, error, Events, events, messageId, messages, isConnected, isConnecting, ifConnected, serializeMessage, unserializeMessage, wrapperFactory, self;
   url = "{URL_INJECTED_BY_BACKEND}";
   DEBUG = true;
-  debug = function(){
-    if (DEBUG) {
-      return console.log.apply(console, ["SOCKJS"].concat(Array.prototype.slice.call(arguments)));
-    }
-  };
-  error = function(){
-    if (DEBUG) {
-      return console.error.apply(console, ["SOCKJS"].concat(Array.prototype.slice.call(arguments)));
-    }
-  };
+  if (typeof console === 'object') {
+    debug = function(){
+      if (DEBUG) {
+        return console.log.apply(console, ["SOCKJS"].concat(Array.prototype.slice.call(arguments)));
+      }
+    };
+    error = function(){
+      if (DEBUG) {
+        return console.error.apply(console, ["SOCKJS"].concat(Array.prototype.slice.call(arguments)));
+      }
+    };
+  } else {
+    debug = function(){};
+    error = function(){};
+  }
   "{CLIENT_SERVER_COMMON_CODE_INJECTED_BY_BACKEND}";
   Events = (function(superclass){
     Events.displayName = 'Events';
