@@ -2,8 +2,13 @@ var client
 
 url = "{URL_INJECTED_BY_BACKEND}"
 DEBUG = true
-debug = -> (console.log.apply console, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if DEBUG
-error = -> (console.error.apply console, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if DEBUG
+
+if typeof console is \object
+	debug = -> (console.log.apply console, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if DEBUG
+	error = -> (console.error.apply console, ["SOCKJS"].concat Array.prototype.slice.call(@@)) if DEBUG
+else
+	debug = ->
+	error = ->
 
 "{CLIENT_SERVER_COMMON_CODE_INJECTED_BY_BACKEND}"
 
